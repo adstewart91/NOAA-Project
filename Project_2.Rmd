@@ -1,4 +1,13 @@
-# Reproducible Research: Course Project 2
+---
+title: 'Reproducible Research: Course Project 2'
+output:
+  pdf_document:
+    fig_caption: yes
+  html_document:
+    fig_caption: yes
+    keep_md: yes
+Author: Andrew D. Stewart
+---
 # Analysis of the Most Dangerous and Most Expensive Weather Events using the NOAA Storm Database
 
 ### Synopsis: 
@@ -16,20 +25,31 @@ Author:  Andrew D. Stewart
 #### Load Libraries
 First, load R libraries: data.table, dplyr, lubridate, ggplot2, datasets, xtable, knitr, and
 stringer.
+```{r libraries,echo=FALSE,results="hide",message=FALSE}
 
+library(data.table)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(datasets)
+library(xtable)
+library(stringr)
+library(knitr)
+
+```
 
 
 ## Load The Data
 Load the data from a file named **repdata_data_StormData.csv** that was provided from the Coursera website.  The events in the database start in the year 1950 and end in November 2011. Additional details of the data can be found at:http://www.nws.noaa.gov/directives/
 
-
-```r
+```{r Load Data, cache = TRUE}
 knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='', echo = TRUE, 
                      fig.keep = "all", results = "asis")
 
 ## Read activity.csv and format as tbl_df
 actyData <- read.csv("repdata_data_StormData.csv", header = TRUE, sep =",")
 actyData <- tbl_df(actyData)
+
 ```
 
 
@@ -41,8 +61,8 @@ The **mostDangerous** and **mostExpensive** `tbl_df` dataframe tables are create
 
 While both of these tables can describe which type of weather events: 1) are the Most Harmful, and 2) have the Greatest Economic consequences, there is **significant inconsistencies** in how the Weather Event Types are recorded in the original data.  These Event Types must be combined, collapsed and filtered for this analysis -- See the **DATA FILTERING** section below. 
 
+```{r Process and Sort Data, cache=TRUE}
 
-```r
 ## Group By Event Type
 evtypeGroup <- group_by(actyData,EVTYPE)
 
@@ -81,6 +101,7 @@ mostDangerous <- arrange(mostDangerous, desc(sumTotal))
 ## Greatest economic impact (and filter out 0's)
 mostExpensive <- filter(sumGroupEvents, totalExpenses > 0)
 mostExpensive <- arrange(mostExpensive, desc(totalExpenses))
+
 ```
 
 
@@ -92,8 +113,7 @@ A `tbl_df` and two `strings` are passed to the function and the function returns
 The function works by filtering the `tbl_df` by the logical or `|` of the `grepl` of both Event Type names that are passed as `strings`.  The filtered `tbl_df` is then mutated using the **first string** name that was passed to the `function` as the new combined row name with the sum of the variable columns -- combined by calling `summarise_all` with `funs(sum)` as the argument.
 
 The old rows of the passed `tbl_df` are removed and the new row is added using `rbind`.  The new `tbl_df` is returned.
-
-```r
+``` {r Function for two similar Event Names}
 collapseEventFunctionTwoNames <- function(groupedEvents, eventName1, eventName2) {
         
         processEvent <- groupedEvents %>% filter((grepl(eventName1, EVTYPE, 
@@ -119,8 +139,7 @@ A `tbl_df` and a `vector` of `strings` are passed to the function and the functi
 The function works using a `for` loop over the passed `vector`of names (i.e.: for each name), filtering the `tbl_df` by the logical `agrepl` of the name in the `string vector`.  The logically filtered `tbl_df` is then mutated using the `string` name and the data from all the variable columns combined by calling `summarise_all` with `funs(sum)` as the argument.
 
 The old rows of passed `tbl_df` are removed by the logical opposite of filter `!(agrepl)` and the new row is added using `rbind` -- this is done for each name provided in the `string vector`.  The new `tbl_df` is returned.
-
-```r
+``` {r Function to collapse multiple similar Activity Type Names}
 collapseEventFunction <- function(groupedEvents, eventNames) {
         
     for (i in 1:length(eventNames)) {
@@ -144,8 +163,8 @@ This step collapses the data by combining **multiple** Weather Type Event data (
 This data filtering is done by calls to the respective helper `function` described above.  The names of the Weather Event Types that are used were created by analysis of the first filtering of the **mostDangerous** and **mostExpensive** datasets.  
 
 In some cases, weather type events were combined by considering data from more recent year as more complete.  Other events that had questionable or inconsistent event names were combined with the event type named "Other."  Other Event Name Types could be considered for more combinations or greater separation, as desired for the analysis; the filtering process is **completely automated and reproducable**. 
+``` {r Data Filtering -- Collapse the Data}
 
-```r
 ## Collapse Event names for Fatalities and Injuries
 
 ## Vectors of strings with similar event names
@@ -210,16 +229,65 @@ newcollapse3 <- filter(newcollapse3, EVTYPE != "?" & EVTYPE != "APACHE COUNTY")
 ## Arrange most dangerous events by sum of Property and Crop Damage
 mostExpensive <- arrange(newcollapse3, desc(totalExpenses))
 mostExpensive <- filter(mostExpensive, totalExpenses > 0) ## Remove all sums < 0
+
 ```
 
 ## RESULTS
 Results are provided graphically by depicting the Event Types with the Most Dangerous and Most Expensive (Greatest Economic consequences) in respective graphs.  The data is displayed in 3-dimensions:  - First, on the Y-axis by Total = Injuries+Fatalities, or Total = Property+Crop Damage.  - Color and Size represent the 2nd and 3rd dimensions of the data and display the sub-components of the Total Sums.  This is interesting to see which events have a predominately greater number of one component-type than the other.  For ease of display, all values are graphed as the log() of the associated data.  
 
 ### Most Dangerous Events
-![](Project_2_files/figure-html/Question1-1.png)<!-- -->
+``` {r Question1, echo = FALSE, warning = FALSE}
+
+eventNames <- as.vector(mostDangerous$EVTYPE)
+
+## Center Justify All Plot Titles for ggplot
+theme_update(plot.title = element_text(hjust = 0.5))
+
+g <- qplot(x=EVTYPE, y=log(sumTotal), data = mostDangerous) + 
+        scale_x_discrete(limits = eventNames)
+
+g <- g + geom_point(aes(size=log(sumFatal), colour = log(sumInjury))) + 
+        scale_colour_distiller(palette= "Spectral") + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+        labs(title = "Total Fatalities and Injuries by Merged NOAA Event Types", 
+             y = "Sum of Fatalties and Injuries (log scale)", x = "Merged Event Type") +
+        guides(colour=guide_legend(title="Log(Sum Injuries)"), 
+               size=guide_legend(title="Log(Sum Fatalities)"))
+
+plot(g)
+
+##png(filename = "plot1.png", width = 680, height = 680)
+##g
+##dev.off()
+
+```
                Figure 1: Events Most Harmful to Population Health
 
 ### Greatest Economic Consequneces (Most Expensive)
-![](Project_2_files/figure-html/Question2-1.png)<!-- -->
+``` {r Question2, echo = FALSE, warning = FALSE}
+
+eventNames2 <- as.vector(mostExpensive$EVTYPE)
+
+## Center Justify All Plot Titles for ggplot
+theme_update(plot.title = element_text(hjust = 0.5))
+
+h <- qplot(x=EVTYPE, y=log(totalExpenses), data = mostExpensive) +
+        scale_x_discrete(limits = eventNames2)
+
+h <- h + geom_point(aes(size=log(sumProp), colour = log(sumCrop))) + 
+        scale_colour_distiller(palette= "Spectral") + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+        labs(title = "Total Property and Crop Damage by Merged NOAA Event Types", 
+             y = "Sum of Property and Crop Damage (log scale)", x = "Merged Event Type") +
+        guides(colour=guide_legend(title="Log(Sum Crop Damage)"), 
+               size=guide_legend(title="Log(Sum Prop. Damage)"))
+
+plot(h)
+
+##png(filename = "plot2.png", width = 680, height = 680)
+##h
+##dev.off()
+
+```
               Figure 2: Events with the Greatest Economic Impact
 
